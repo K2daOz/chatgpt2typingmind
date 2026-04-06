@@ -1,0 +1,10 @@
+# ChatGPT -> TypingMind Migration Tool
+
+# GUI
+PyQt6>=6.5.0
+
+# Optional: Cloudflare R2 Bild-Upload
+boto3>=1.28.0
+
+# Optional: .exe bauen
+# pyinstaller>=6.0.0

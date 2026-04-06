@@ -1,0 +1,10 @@
+{
+  "_comment": "Diese Datei wird automatisch durch 'python migrate.py --discover' befuellt.",
+  "folder_map": {},
+  "project_instructions": {},
+  "image_base_url": "",
+  "output": {
+    "zip": true,
+    "flat_json": true
+  }
+}
