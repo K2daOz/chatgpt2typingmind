@@ -673,6 +673,8 @@ class MigrationPage(QWizardPage):
     def _on_finished(self, zip_path: str):
         self._zip_path = zip_path
         self.progress_bar.setVisible(False)
+
+        # Log-Output mit Anleitung
         self._log(f"\nZIP: {zip_path}")
         self._log("\n" + "=" * 55)
         self._log(f"  {tr('p4_finish_title')}")
@@ -690,6 +692,17 @@ class MigrationPage(QWizardPage):
         self._log("-" * 45)
         self._log(tr("p4_tip"))
         self._log("")
+
+        # Auffaelliger Cloud-Sync Hinweis als separates UI-Element
+        cloud_hint = QLabel(tr("p4_cloud_warning"))
+        cloud_hint.setWordWrap(True)
+        cloud_hint.setTextFormat(Qt.TextFormat.RichText)
+        cloud_hint.setStyleSheet(
+            "padding: 12px; background: #fff3e0; border: 2px solid #ff9800; "
+            "border-radius: 6px; color: #333; font-size: 12px;"
+        )
+        self.layout().insertWidget(self.layout().indexOf(self.open_btn), cloud_hint)
+
         self.open_btn.setVisible(True)
 
     def _on_error(self, msg: str):

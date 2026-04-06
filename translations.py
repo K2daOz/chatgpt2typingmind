@@ -234,6 +234,34 @@ STRINGS: Dict[str, Dict[str, str]] = {
         ),
     },
 
+    # --- Cloud Sync Warning (rich text) ---
+    "p4_cloud_warning": {
+        "de": (
+            "<b>Wichtig: TypingMind Cloud Sync</b><br><br>"
+            "Falls du TypingMind Cloud Sync nutzt, werden importierte Chats "
+            "moeglicherweise von der leeren Cloud ueberschrieben.<br><br>"
+            "<b>Loesung:</b><br>"
+            "1. Importiere die ZIP-Datei (Settings &rarr; App-Daten &rarr; Importieren)<br>"
+            "2. Logge dich in die Cloud ein (Settings &rarr; Cloud-Sync &rarr; Einloggen)<br>"
+            "3. Falls Chats verschwinden: Gehe zu <b>Cloud-Sync &rarr; Zuletzt geloescht</b><br>"
+            "4. Waehle <b>alle Chats, Ordner, Agents und Plugins</b> aus<br>"
+            "5. Klicke <b>'Wiederherstellen'</b> fuer jede Kategorie<br>"
+            "6. Danach synchronisiert die Cloud korrekt und die Daten bleiben erhalten."
+        ),
+        "en": (
+            "<b>Important: TypingMind Cloud Sync</b><br><br>"
+            "If you use TypingMind Cloud Sync, imported chats may be "
+            "overwritten by the empty cloud state.<br><br>"
+            "<b>Solution:</b><br>"
+            "1. Import the ZIP file (Settings &rarr; App Data &rarr; Import)<br>"
+            "2. Log into Cloud (Settings &rarr; Cloud-Sync &rarr; Log in)<br>"
+            "3. If chats disappear: Go to <b>Cloud-Sync &rarr; Recently Deleted</b><br>"
+            "4. Select <b>all Chats, Folders, Agents and Plugins</b><br>"
+            "5. Click <b>'Restore'</b> for each category<br>"
+            "6. After that, Cloud Sync works correctly and data persists."
+        ),
+    },
+
     # --- License Dialog ---
     "lic_title": {"de": "Lizenz", "en": "License"},
     "lic_pro_active": {
