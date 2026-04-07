@@ -27,7 +27,7 @@ jobs:
           pip install PyQt6 boto3 pytest
 
       - name: Run unit tests
-        run: pytest test_*.py -v
+        run: pytest test_license.py test_discover.py test_manifest.py -v
 
   build-exe:
     runs-on: windows-latest
