@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+dist/
+build/
+*.spec
+*.exe
+.license
+config.json
+manifest.json
+migration_workspace/
+migration_output/
+*.zip
