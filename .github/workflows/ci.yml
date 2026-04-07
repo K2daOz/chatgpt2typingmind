@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt6 boto3 pytest
+
+      - name: Run unit tests
+        run: pytest test_*.py -v
+
+  build-exe:
+    runs-on: windows-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install PyQt6 boto3 pyinstaller
+
+      - name: Build .exe
+        run: |
+          pyinstaller --onefile --windowed --name "ChatGPT2TypingMind" `
+            --add-data "normalize_chatgpt_export.py;." `
+            --add-data "discover.py;." `
+            --add-data "build_typingmind_export.py;." `
+            --add-data "manifest.py;." `
+            --add-data "upload_to_r2.py;." `
+            --add-data "license.py;." `
+            --add-data "translations.py;." `
+            --add-data "config.template.json;." `
+            gui.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChatGPT2TypingMind-exe
+          path: dist/ChatGPT2TypingMind.exe

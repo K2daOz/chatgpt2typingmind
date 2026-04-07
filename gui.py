@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, QUrl
 from PyQt6.QtGui import QFont, QDesktopServices
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QFileDialog, QGroupBox,
@@ -92,6 +92,10 @@ class DiscoverWorker(QThread):
             canonical_path.write_text(
                 json.dumps(canonical, indent=2, ensure_ascii=False) + "\n", encoding="utf-8",
             )
+            if not conversations_raw:
+                self.error.emit(tr("p1_no_conversations"))
+                return
+
             config["_canonical_path"] = str(canonical_path)
             config["_export_dir"] = str(self.export_dir)
             config["_conversations_count"] = len(conversations_raw)
@@ -161,6 +165,14 @@ class MigrateWorker(QThread):
                 chats = chats[:FREE_CHAT_LIMIT]
                 self.progress.emit(tr("p4_free_limit", limit=FREE_CHAT_LIMIT, total=total_found))
 
+            if not chats:
+                self.error.emit(
+                    "No chats converted. The export may be empty or corrupted.\n"
+                    "Keine Chats konvertiert. Der Export ist moeglicherweise leer oder beschaedigt."
+                )
+                return
+
+            self.progress.emit(f"{len(chats)} chats converted. Writing export...")
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
             out_dir = self.export_dir.parent / "migration_output" / f"typingmind_import_{ts}"
             out_dir.mkdir(parents=True, exist_ok=True)
@@ -583,6 +595,8 @@ class MigrationPage(QWizardPage):
         super().__init__()
         self._built = False
         self._zip_path: Optional[str] = None
+        self._timeout_timer: Optional[QTimer] = None
+        self._WORKER_TIMEOUT_MS = 10 * 60 * 1000  # 10 Minuten
 
     def initializePage(self):
         self.setTitle(tr("p4_title"))
@@ -629,6 +643,12 @@ class MigrationPage(QWizardPage):
         self.progress_bar.setVisible(True)
         self.log.clear()
 
+        # Timeout-Timer starten
+        self._timeout_timer = QTimer()
+        self._timeout_timer.setSingleShot(True)
+        self._timeout_timer.timeout.connect(self._on_timeout)
+        self._timeout_timer.start(self._WORKER_TIMEOUT_MS)
+
         wizard = self.wizard()
         page1: ExportSelectPage = wizard.page(0)
         page2: FolderConfigPage = wizard.page(1)
@@ -671,6 +691,7 @@ class MigrationPage(QWizardPage):
         self._migrate_worker.start()
 
     def _on_finished(self, zip_path: str):
+        self._stop_timeout()
         self._zip_path = zip_path
         self.progress_bar.setVisible(False)
 
@@ -705,7 +726,20 @@ class MigrationPage(QWizardPage):
 
         self.open_btn.setVisible(True)
 
+    def _stop_timeout(self):
+        if self._timeout_timer and self._timeout_timer.isActive():
+            self._timeout_timer.stop()
+
+    def _on_timeout(self):
+        self.progress_bar.setVisible(False)
+        self._log(
+            "\nTIMEOUT: Operation took longer than 10 minutes and was stopped.\n"
+            "TIMEOUT: Die Operation hat laenger als 10 Minuten gedauert und wurde gestoppt."
+        )
+        self.start_btn.setEnabled(True)
+
     def _on_error(self, msg: str):
+        self._stop_timeout()
         self.progress_bar.setVisible(False)
         self._log(f"\nERROR: {msg}")
         self.start_btn.setEnabled(True)
