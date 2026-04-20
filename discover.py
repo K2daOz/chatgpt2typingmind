@@ -51,35 +51,25 @@ def suggest_folder_name(
     projects_json_map: Optional[Dict[str, Dict]] = None,
 ) -> str:
     """
-    Leitet einen sinnvollen Ordnernamen fuer ein Projekt/GPT ab.
+    Uebernimmt den Ordnernamen 1:1 aus ChatGPT, ohne Transformation.
 
     Prioritaet:
-      1. projects.json Titel (falls vorhanden)
-      2. Haeufigster gemeinsamer Praefix der Chat-Titel
-      3. Erster Chat-Titel
-      4. Fallback: "Projekt [ID-Kuerzel]"
+      1. projects.json Titel (unveraendert, falls vorhanden)
+      2. Erster Chat-Titel (unveraendert)
+      3. Fallback: "Projekt [ID-Kuerzel]"
     """
-    # 1. projects.json
+    # 1. projects.json Titel unveraendert uebernehmen
     if projects_json_map and project_id in projects_json_map:
         name = projects_json_map[project_id].get("title", "")
         if name and not name.startswith("Projekt "):
-            return _clean_name(name)
+            return name
 
-    if not titles:
-        return f"Projekt {project_id[:12]}"
+    # 2. Erster Chat-Titel unveraendert uebernehmen
+    if titles:
+        return titles[0]
 
-    # 2. Gemeinsamer Praefix (mind. 3 Zeichen, mind. 2 Titel)
-    if len(titles) >= 2:
-        prefix = _common_prefix(titles)
-        if len(prefix) >= 3:
-            return _clean_name(prefix)
-
-    # 3. Erster Chat-Titel als Name
-    first = titles[0]
-    # Kuerzen wenn zu lang (max 40 Zeichen)
-    if len(first) > 40:
-        first = first[:37] + "..."
-    return _clean_name(first)
+    # 3. Fallback
+    return f"Projekt {project_id[:12]}"
 
 
 def _common_prefix(titles: List[str]) -> str:

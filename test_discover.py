@@ -66,24 +66,25 @@ class TestSuggestFolderName(unittest.TestCase):
         name = suggest_folder_name("g-p-abc123def456", [])
         self.assertTrue(name.startswith("Projekt g-p-abc123"))
 
-    def test_single_title(self):
+    def test_single_title_unchanged(self):
         name = suggest_folder_name("p1", ["My Project"])
         self.assertEqual(name, "My Project")
 
-    def test_common_prefix(self):
-        name = suggest_folder_name("p1", ["Marketing Plan A", "Marketing Plan B", "Marketing Plan C"])
-        # _common_prefix splits at last word boundary before divergence
-        self.assertIn("Marketing", name)
+    def test_uses_first_title_unchanged(self):
+        # Keine Common-Prefix-Extraktion mehr — erster Titel wird 1:1 uebernommen
+        name = suggest_folder_name("p1", ["Marketing Plan A", "Marketing Plan B"])
+        self.assertEqual(name, "Marketing Plan A")
 
-    def test_short_prefix_uses_first_title(self):
-        name = suggest_folder_name("p1", ["AB foo", "AB bar"])
-        # "AB" is too short (< 3), falls back to first title
-        self.assertEqual(name, "AB foo")
-
-    def test_long_title_truncated(self):
+    def test_long_title_not_truncated(self):
+        # Keine Truncation mehr — Name wird unveraendert uebernommen
         long_title = "A" * 50
         name = suggest_folder_name("p1", [long_title])
-        self.assertLessEqual(len(name), 40)
+        self.assertEqual(name, long_title)
+
+    def test_title_whitespace_preserved(self):
+        # Kein strip/clean mehr — Whitespace bleibt erhalten
+        name = suggest_folder_name("p1", ["  Hello World  "])
+        self.assertEqual(name, "  Hello World  ")
 
     def test_projects_json_takes_priority(self):
         projects_map = {"p1": {"title": "Real Name"}}

@@ -505,7 +505,8 @@ def chatgpt_conv_to_tm(
 ) -> Dict:
     """Konvertiert eine ChatGPT-Konversation in ein TypingMind-Chat-Objekt."""
     cid = raw_conv.get("id") or raw_conv.get("conversation_id") or str(uuid.uuid4())
-    title = (raw_conv.get("title") or "Ohne Titel").strip()
+    # Chat-Titel 1:1 aus ChatGPT uebernehmen (keine Transformation)
+    title = raw_conv.get("title") or "Untitled"
 
     mapping = raw_conv.get("mapping") or {}
     messages = traverse_mapping(mapping, image_map, image_base_url, export_dir)
