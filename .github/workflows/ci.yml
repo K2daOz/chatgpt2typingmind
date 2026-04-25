@@ -27,7 +27,7 @@ jobs:
           pip install PyQt6 boto3 pytest
 
       - name: Run unit tests
-        run: pytest test_license.py test_discover.py test_manifest.py -v
+        run: pytest test_license.py test_discover.py test_manifest.py test_settings.py test_chat_metadata.py -v
 
   build-exe:
     runs-on: windows-latest
@@ -56,6 +56,7 @@ jobs:
             --add-data "upload_to_r2.py;." `
             --add-data "license.py;." `
             --add-data "translations.py;." `
+            --add-data "settings.py;." `
             --add-data "config.template.json;." `
             gui.py
 

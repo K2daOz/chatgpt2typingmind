@@ -543,6 +543,17 @@ def chatgpt_conv_to_tm(
     if folder_id:
         chat["folderID"] = folder_id
 
+    # ChatGPT-Metadata als TypingMind-Tags uebernehmen
+    tags: List[str] = []
+    if raw_conv.get("is_starred"):
+        tags.append("starred")
+    if raw_conv.get("is_pinned"):
+        tags.append("pinned")
+    if raw_conv.get("is_archived"):
+        tags.append("archived")
+    if tags:
+        chat["tags"] = tags
+
     return chat
 
 

@@ -91,6 +91,13 @@ STRINGS: Dict[str, Dict[str, str]] = {
             "'Parent' nests folders (e.g. 'Clients'). Empty = top level."
         ),
     },
+    "p2_select_all": {"de": "Alle auswaehlen", "en": "Select All"},
+    "p2_select_none": {"de": "Alle abwaehlen", "en": "Select None"},
+    "p2_filter_keyword": {"de": "Suche:", "en": "Filter:"},
+    "p2_filter_min_chats": {"de": "Min. Chats:", "en": "Min chats:"},
+    "p2_apply_filter": {"de": "Filter anwenden", "en": "Apply Filter"},
+    "p2_keyword_placeholder": {"de": "Keyword im Ordnername...", "en": "Keyword in folder name..."},
+    "p2_col_include": {"de": "Import", "en": "Import"},
     "p2_col_folder": {"de": "Ordnername", "en": "Folder Name"},
     "p2_col_parent": {"de": "Ueberordner", "en": "Parent Folder"},
     "p2_col_chats": {"de": "Chats", "en": "Chats"},
@@ -232,6 +239,52 @@ STRINGS: Dict[str, Dict[str, str]] = {
             "  to TypingMind -> Folder -> Project context\n"
             "  & instructions"
         ),
+    },
+
+    # --- Migration Report (Feature 3) ---
+    "p4_report_title": {
+        "de": "MIGRATIONS-REPORT",
+        "en": "MIGRATION REPORT",
+    },
+    "p4_report_chats": {
+        "de": "  Chats migriert: {count}",
+        "en": "  Chats migrated: {count}",
+    },
+    "p4_report_folders": {
+        "de": "  Ordner erstellt: {count}",
+        "en": "  Folders created: {count}",
+    },
+    "p4_report_size": {
+        "de": "  ZIP-Groesse: {mb} MB",
+        "en": "  ZIP size: {mb} MB",
+    },
+    "p4_report_images": {
+        "de": "  Bilder gemappt: {count}",
+        "en": "  Images mapped: {count}",
+    },
+    "p4_report_starred": {
+        "de": "  Mit Stern markiert: {count}",
+        "en": "  Starred: {count}",
+    },
+    "p4_report_pinned": {
+        "de": "  Angepinnt: {count}",
+        "en": "  Pinned: {count}",
+    },
+    "p4_report_archived": {
+        "de": "  Archiviert: {count}",
+        "en": "  Archived: {count}",
+    },
+    "p4_report_skipped_disabled": {
+        "de": "  Uebersprungen (deaktiviert): {count}",
+        "en": "  Skipped (disabled): {count}",
+    },
+    "p4_report_skipped_no_raw": {
+        "de": "  Uebersprungen (kein Raw-Eintrag): {count}",
+        "en": "  Skipped (no raw entry): {count}",
+    },
+    "p4_report_breakdown": {
+        "de": "  Top-Ordner nach Chat-Anzahl:",
+        "en": "  Top folders by chat count:",
     },
 
     # --- Cloud Sync Warning (rich text) ---

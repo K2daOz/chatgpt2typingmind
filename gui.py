@@ -45,6 +45,7 @@ from manifest import (
     update_manifest,
 )
 from translations import tr, set_language, get_language, R2_GUIDE_DE, R2_GUIDE_EN
+import settings as app_settings
 
 
 # ===================================================================
@@ -106,13 +107,14 @@ class DiscoverWorker(QThread):
 
 class MigrateWorker(QThread):
     progress = pyqtSignal(str)
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(str, dict)  # (zip_path, stats)
     error = pyqtSignal(str)
 
-    def __init__(self, config: dict, export_dir: Path, canonical_path: Path, is_pro: bool = False):
+    def __init__(self, config: dict, export_dir: Path, canonical_path: Path, is_pro: bool = False, filters: Optional[dict] = None):
         super().__init__()
         self.config, self.export_dir = config, export_dir
         self.canonical_path, self.is_pro = canonical_path, is_pro
+        self.filters = filters or {}
 
     def run(self):
         try:
@@ -127,11 +129,18 @@ class MigrateWorker(QThread):
             self.progress.emit("Building image map...")
             image_map = build_image_map(self.export_dir, None)
 
+            # Selektive Migration: nur enabled-Projekte beruecksichtigen
+            enabled_pids = {pid for pid, entry in folder_map.items() if entry.get("enabled", True)}
+            disabled_count = len(folder_map) - len(enabled_pids)
+            if disabled_count > 0:
+                self.progress.emit(f"Skipping {disabled_count} disabled project(s)...")
+            enabled_folder_map = {pid: entry for pid, entry in folder_map.items() if pid in enabled_pids}
+
             self.progress.emit("Building folders...")
-            folders, title_to_id = build_folder_structure([], folder_map, project_instructions)
+            folders, title_to_id = build_folder_structure([], enabled_folder_map, project_instructions)
 
             pid_to_folder_id = {}
-            for pid, entry in folder_map.items():
+            for pid, entry in enabled_folder_map.items():
                 folder_title = entry.get("folder") or f"Projekt {pid[:12]}"
                 pid_to_folder_id[pid] = title_to_id.get(folder_title)
 
@@ -145,6 +154,16 @@ class MigrateWorker(QThread):
                 raw_convs = load_json(conv_single)
             raw_by_id = {(c.get("id") or c.get("conversation_id") or ""): c for c in raw_convs}
 
+            # Statistiken sammeln fuer Report
+            stats: Dict[str, Any] = {
+                "chats_per_folder": {},
+                "skipped_disabled": 0,
+                "skipped_no_raw": 0,
+                "starred": 0,
+                "pinned": 0,
+                "archived": 0,
+            }
+
             chats = []
             total = len(canonical["conversations"])
             for i, conv in enumerate(canonical["conversations"], 1):
@@ -153,11 +172,26 @@ class MigrateWorker(QThread):
                 cid = conv["conversation_id"]
                 raw = raw_by_id.get(cid)
                 if not raw:
+                    stats["skipped_no_raw"] += 1
                     continue
                 pid = conv.get("project_id")
+                # Skip wenn Projekt deaktiviert
+                if pid and pid not in enabled_pids:
+                    stats["skipped_disabled"] += 1
+                    continue
                 folder_id = pid_to_folder_id.get(pid) if pid else None
                 tm_chat = chatgpt_conv_to_tm(raw, folder_id, image_map, image_base_url, self.export_dir)
                 chats.append(tm_chat)
+
+                # Statistiken
+                folder_title = enabled_folder_map.get(pid, {}).get("folder", "Standalone") if pid else "Standalone"
+                stats["chats_per_folder"][folder_title] = stats["chats_per_folder"].get(folder_title, 0) + 1
+                if raw.get("is_starred"):
+                    stats["starred"] += 1
+                if raw.get("is_pinned"):
+                    stats["pinned"] += 1
+                if raw.get("is_archived"):
+                    stats["archived"] += 1
 
             if not self.is_pro and len(chats) > FREE_CHAT_LIMIT:
                 total_found = len(chats)
@@ -181,7 +215,13 @@ class MigrateWorker(QThread):
             flat_path.write_text(json.dumps(export_data, ensure_ascii=False) + "\n", encoding="utf-8")
             zip_path = write_zip(out_dir, flat_path)
 
-            self.finished.emit(str(zip_path))
+            # Statistiken finalisieren
+            stats["total_chats"] = len(chats)
+            stats["total_folders"] = len(folders)
+            stats["zip_size_mb"] = round(zip_path.stat().st_size / (1024 * 1024), 2)
+            stats["images_mapped"] = len(image_map)
+
+            self.finished.emit(str(zip_path), stats)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -471,8 +511,40 @@ class FolderConfigPage(QWizardPage):
 
         if not self._built:
             layout = QVBoxLayout()
+
+            # Toolbar mit Bulk-Actions
+            toolbar = QHBoxLayout()
+            self.select_all_btn = QPushButton()
+            self.select_all_btn.clicked.connect(lambda: self._set_all_checked(True))
+            toolbar.addWidget(self.select_all_btn)
+            self.select_none_btn = QPushButton()
+            self.select_none_btn.clicked.connect(lambda: self._set_all_checked(False))
+            toolbar.addWidget(self.select_none_btn)
+            toolbar.addStretch()
+            layout.addLayout(toolbar)
+
+            # Filter-Toolbar (Feature 5)
+            filter_layout = QHBoxLayout()
+            self.filter_label = QLabel()
+            filter_layout.addWidget(self.filter_label)
+            self.keyword_filter = QLineEdit()
+            self.keyword_filter.setPlaceholderText("")
+            self.keyword_filter.setMaximumWidth(200)
+            filter_layout.addWidget(self.keyword_filter)
+            self.min_chats_label = QLabel()
+            filter_layout.addWidget(self.min_chats_label)
+            self.min_chats_filter = QLineEdit()
+            self.min_chats_filter.setPlaceholderText("0")
+            self.min_chats_filter.setMaximumWidth(60)
+            filter_layout.addWidget(self.min_chats_filter)
+            self.apply_filter_btn = QPushButton()
+            self.apply_filter_btn.clicked.connect(self._apply_filter)
+            filter_layout.addWidget(self.apply_filter_btn)
+            filter_layout.addStretch()
+            layout.addLayout(filter_layout)
+
             self.table = QTableWidget()
-            self.table.setColumnCount(4)
+            self.table.setColumnCount(5)  # +1 fuer Checkbox
             layout.addWidget(self.table)
 
             self.hint_label = QLabel()
@@ -483,14 +555,22 @@ class FolderConfigPage(QWizardPage):
             self._built = True
 
         self.hint_label.setText(tr("p2_hint"))
+        self.select_all_btn.setText(tr("p2_select_all"))
+        self.select_none_btn.setText(tr("p2_select_none"))
+        self.filter_label.setText(tr("p2_filter_keyword"))
+        self.min_chats_label.setText(tr("p2_filter_min_chats"))
+        self.apply_filter_btn.setText(tr("p2_apply_filter"))
+        self.keyword_filter.setPlaceholderText(tr("p2_keyword_placeholder"))
         self.table.setHorizontalHeaderLabels([
-            tr("p2_col_folder"), tr("p2_col_parent"), tr("p2_col_chats"), tr("p2_col_samples")
+            tr("p2_col_include"), tr("p2_col_folder"), tr("p2_col_parent"),
+            tr("p2_col_chats"), tr("p2_col_samples")
         ])
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
 
         page1: ExportSelectPage = self.wizard().page(0)
         if not page1 or not hasattr(page1, "_config") or not page1._config:
@@ -502,18 +582,61 @@ class FolderConfigPage(QWizardPage):
 
         for row, pid in enumerate(self._pid_order):
             entry = folder_map[pid]
-            self.table.setItem(row, 0, QTableWidgetItem(entry.get("folder", "")))
-            self.table.setItem(row, 1, QTableWidgetItem(entry.get("parent") or ""))
+
+            # Checkbox (Spalte 0): default True, bzw. aus enabled-Field falls vorhanden
+            check_item = QTableWidgetItem()
+            check_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            check_item.setCheckState(
+                Qt.CheckState.Checked if entry.get("enabled", True) else Qt.CheckState.Unchecked
+            )
+            self.table.setItem(row, 0, check_item)
+
+            self.table.setItem(row, 1, QTableWidgetItem(entry.get("folder", "")))
+            self.table.setItem(row, 2, QTableWidgetItem(entry.get("parent") or ""))
             count_item = QTableWidgetItem(str(entry.get("conversations", 0)))
             count_item.setFlags(count_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 2, count_item)
+            self.table.setItem(row, 3, count_item)
             samples = entry.get("sample_titles", [])
             sample_text = ", ".join(samples[:3])
             if len(samples) > 3:
                 sample_text += f" (+{len(samples)-3})"
             sample_item = QTableWidgetItem(sample_text)
             sample_item.setFlags(sample_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 3, sample_item)
+            self.table.setItem(row, 4, sample_item)
+
+    def _set_all_checked(self, checked: bool):
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item:
+                item.setCheckState(state)
+
+    def _apply_filter(self):
+        """Filtert: aktiviert nur Projekte die Keyword im Namen UND >= min_chats haben."""
+        keyword = self.keyword_filter.text().strip().lower()
+        try:
+            min_chats = int(self.min_chats_filter.text().strip() or "0")
+        except ValueError:
+            min_chats = 0
+
+        for row in range(self.table.rowCount()):
+            check_item = self.table.item(row, 0)
+            folder_item = self.table.item(row, 1)
+            count_item = self.table.item(row, 3)
+            if not (check_item and folder_item and count_item):
+                continue
+
+            folder_name = folder_item.text().lower()
+            try:
+                chat_count = int(count_item.text())
+            except ValueError:
+                chat_count = 0
+
+            keyword_ok = (not keyword) or (keyword in folder_name)
+            count_ok = chat_count >= min_chats
+            check_item.setCheckState(
+                Qt.CheckState.Checked if (keyword_ok and count_ok) else Qt.CheckState.Unchecked
+            )
 
     def get_folder_map(self) -> Dict[str, Dict]:
         page1: ExportSelectPage = self.wizard().page(0)
@@ -522,8 +645,12 @@ class FolderConfigPage(QWizardPage):
         folder_map = dict(page1._config.get("folder_map", {}))
         for row, pid in enumerate(self._pid_order):
             if pid in folder_map:
-                folder_map[pid]["folder"] = self.table.item(row, 0).text().strip()
-                folder_map[pid]["parent"] = self.table.item(row, 1).text().strip() or None
+                check_item = self.table.item(row, 0)
+                folder_map[pid]["enabled"] = (
+                    check_item.checkState() == Qt.CheckState.Checked if check_item else True
+                )
+                folder_map[pid]["folder"] = self.table.item(row, 1).text().strip()
+                folder_map[pid]["parent"] = self.table.item(row, 2).text().strip() or None
         return folder_map
 
 
@@ -566,6 +693,30 @@ class ImageHostingPage(QWizardPage):
             layout.addWidget(self.r2_group)
             layout.addStretch()
             self.setLayout(layout)
+
+            # Persistente Settings: R2-Credentials laden (Feature 4)
+            saved = app_settings.load_settings()
+            self.account_id.setText(saved.get("r2_account_id", ""))
+            self.access_key.setText(saved.get("r2_access_key_id", ""))
+            self.secret_key.setText(saved.get("r2_secret_access_key", ""))
+            self.bucket.setText(saved.get("r2_bucket", ""))
+            self.public_url.setText(saved.get("r2_public_url", ""))
+            # Auto-enable wenn Credentials vorhanden
+            if saved.get("r2_account_id"):
+                self.enable_check.setChecked(True)
+
+            # Auto-Save bei Aenderungen
+            for field, key in [
+                (self.account_id, "r2_account_id"),
+                (self.access_key, "r2_access_key_id"),
+                (self.secret_key, "r2_secret_access_key"),
+                (self.bucket, "r2_bucket"),
+                (self.public_url, "r2_public_url"),
+            ]:
+                field.editingFinished.connect(
+                    lambda f=field, k=key: app_settings.set_value(k, f.text().strip())
+                )
+
             self._built = True
 
         # Texte aktualisieren
@@ -690,10 +841,38 @@ class MigrationPage(QWizardPage):
         self._migrate_worker.error.connect(self._on_error)
         self._migrate_worker.start()
 
-    def _on_finished(self, zip_path: str):
+    def _on_finished(self, zip_path: str, stats: dict):
         self._stop_timeout()
         self._zip_path = zip_path
         self.progress_bar.setVisible(False)
+
+        # Migration Report (Feature 3)
+        self._log("=" * 55)
+        self._log(f"  {tr('p4_report_title')}")
+        self._log("=" * 55)
+        self._log(tr("p4_report_chats", count=stats.get("total_chats", 0)))
+        self._log(tr("p4_report_folders", count=stats.get("total_folders", 0)))
+        self._log(tr("p4_report_size", mb=stats.get("zip_size_mb", 0)))
+        self._log(tr("p4_report_images", count=stats.get("images_mapped", 0)))
+        if stats.get("starred"):
+            self._log(tr("p4_report_starred", count=stats["starred"]))
+        if stats.get("pinned"):
+            self._log(tr("p4_report_pinned", count=stats["pinned"]))
+        if stats.get("archived"):
+            self._log(tr("p4_report_archived", count=stats["archived"]))
+        if stats.get("skipped_disabled"):
+            self._log(tr("p4_report_skipped_disabled", count=stats["skipped_disabled"]))
+        if stats.get("skipped_no_raw"):
+            self._log(tr("p4_report_skipped_no_raw", count=stats["skipped_no_raw"]))
+
+        chats_per_folder = stats.get("chats_per_folder", {})
+        if chats_per_folder:
+            self._log("")
+            self._log(tr("p4_report_breakdown"))
+            for folder, count in sorted(chats_per_folder.items(), key=lambda x: -x[1])[:10]:
+                self._log(f"  {folder}: {count}")
+            if len(chats_per_folder) > 10:
+                self._log(f"  ... +{len(chats_per_folder)-10} more")
 
         # Log-Output mit Anleitung
         self._log(f"\nZIP: {zip_path}")
@@ -801,6 +980,8 @@ class MigrationWizard(QWizard):
     def _toggle_language(self):
         new_lang = "de" if get_language() == "en" else "en"
         set_language(new_lang)
+        # Persistieren
+        app_settings.set_value("language", new_lang)
         self._update_title()
         self._update_buttons()
         self._update_lang_btn()
@@ -825,7 +1006,9 @@ class MigrationWizard(QWizard):
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
-    set_language("en")  # Default English
+    # Sprache aus Settings laden (Feature 4)
+    saved_lang = app_settings.get("language", "en")
+    set_language(saved_lang)
     wizard = MigrationWizard()
     wizard.show()
     sys.exit(app.exec())
