@@ -34,6 +34,14 @@ FREE_CHAT_LIMIT = 100
 
 
 class LicenseError(Exception):
+    """Allgemeiner Lizenzfehler (Netzwerk, ungueltige Antwort, etc.)."""
+    pass
+
+
+class LicenseRevokedError(LicenseError):
+    """Gumroad hat den Key explizit abgelehnt (success: false).
+    Im Gegensatz zu Netzwerkfehlern bedeutet dies: Lizenz ist ungueltig
+    (z.B. Refund/Widerruf) und Pro sollte deaktiviert werden."""
     pass
 
 
@@ -136,14 +144,12 @@ def validate_online(license_key: str, increment: bool = True) -> dict:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
 
+    # Standard-SSL-Kontext (PyInstaller bundlet CA-Zertifikate via certifi-Hook).
+    # Bei echten Zertifikatsproblemen scheitert die Verbindung mit SSLError —
+    # diese wird als Netzwerkfehler behandelt (Cache bleibt gueltig, Offline-Modus).
+    ctx = ssl.create_default_context()
+
     try:
-        try:
-            ctx = ssl.create_default_context()
-        except Exception:
-            # Fallback fuer PyInstaller-Frozen Apps ohne CA-Bundle
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
         with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
             body = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
@@ -152,6 +158,9 @@ def validate_online(license_key: str, increment: bool = True) -> dict:
             msg = err_body.get("message", str(e))
         except Exception:
             msg = str(e)
+        # HTTP 404 = Lizenz existiert nicht (Refund/Widerruf) -> explizit ablehnen
+        if e.code == 404:
+            raise LicenseRevokedError(msg)
         raise LicenseError(f"Gumroad API Fehler: {msg}")
     except (urllib.error.URLError, OSError, ssl.SSLError) as e:
         raise LicenseError(f"Netzwerkfehler: {e}")
@@ -160,7 +169,8 @@ def validate_online(license_key: str, increment: bool = True) -> dict:
 
     if not body.get("success"):
         msg = body.get("message", "Ungueltiger Lizenz-Key")
-        raise LicenseError(msg)
+        # success: false = Lizenz explizit ungueltig (nicht Netzwerk) -> ablehnen
+        raise LicenseRevokedError(msg)
 
     return body
 
@@ -224,8 +234,16 @@ def is_pro() -> bool:
         # Aktualisiere Timestamp
         cached["validated_at"] = datetime.now(timezone.utc).isoformat()
         save_license_cache(cached)
+    except LicenseRevokedError:
+        # Lizenz wurde explizit widerrufen (Refund) -> Pro deaktivieren
+        try:
+            get_license_path().unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
     except (LicenseError, OSError):
-        pass  # Netzfehler: Cache akzeptieren (Offline-Modus)
+        # Netzfehler: Cache akzeptieren (Offline-Modus)
+        pass
 
     return True
 

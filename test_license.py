@@ -3,6 +3,7 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -14,9 +15,20 @@ from license import (
     save_license_cache,
     validate_online,
     LicenseError,
+    LicenseRevokedError,
     FREE_CHAT_LIMIT,
     GUMROAD_PRODUCT_ID,
 )
+
+
+def _recent_iso() -> str:
+    """Datum 1 Tag in der Vergangenheit (immer < 30 Tage = frisch)."""
+    return (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+
+
+def _stale_iso() -> str:
+    """Datum 60 Tage in der Vergangenheit (immer > 30 Tage = stale)."""
+    return (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
 
 
 class TestFreeChatLimit(unittest.TestCase):
@@ -134,9 +146,10 @@ class TestIsPro(unittest.TestCase):
 
     @patch("license.load_cached_license")
     def test_fresh_cache(self, mock_load):
+        # Dynamisch frisches Datum -> keine Revalidierung, kein Netzwerk-Call
         mock_load.return_value = {
             "license_key": "KEY",
-            "validated_at": "2026-04-07T00:00:00+00:00",
+            "validated_at": _recent_iso(),
             "email": "test@example.com",
         }
         self.assertTrue(is_pro())
@@ -147,7 +160,7 @@ class TestIsPro(unittest.TestCase):
     def test_stale_cache_revalidates(self, mock_load, mock_save, mock_validate):
         mock_load.return_value = {
             "license_key": "KEY",
-            "validated_at": "2025-01-01T00:00:00+00:00",  # > 30 days old
+            "validated_at": _stale_iso(),  # > 30 days old
             "email": "test@example.com",
         }
         mock_validate.return_value = {"success": True}
@@ -158,11 +171,25 @@ class TestIsPro(unittest.TestCase):
     def test_stale_cache_offline_still_pro(self, mock_load, mock_validate):
         mock_load.return_value = {
             "license_key": "KEY",
-            "validated_at": "2025-01-01T00:00:00+00:00",
+            "validated_at": _stale_iso(),
             "email": "test@example.com",
         }
         mock_validate.side_effect = LicenseError("Network error")
         self.assertTrue(is_pro())  # Offline grace period
+
+    @patch("license.get_license_path")
+    @patch("license.validate_online")
+    @patch("license.load_cached_license")
+    def test_stale_cache_revoked_loses_pro(self, mock_load, mock_validate, mock_path):
+        # Refund/Widerruf: Gumroad lehnt explizit ab -> Pro deaktivieren
+        mock_load.return_value = {
+            "license_key": "KEY",
+            "validated_at": _stale_iso(),
+            "email": "test@example.com",
+        }
+        mock_validate.side_effect = LicenseRevokedError("license revoked")
+        mock_path.return_value = MagicMock()  # unlink() darf aufgerufen werden
+        self.assertFalse(is_pro())  # Pro verloren nach Refund
 
 
 if __name__ == "__main__":
