@@ -6,6 +6,7 @@ build/
 *.spec
 *.exe
 .license
+.settings.json
 config.json
 manifest.json
 migration_workspace/
