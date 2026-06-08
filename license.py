@@ -144,13 +144,17 @@ def validate_online(license_key: str, increment: bool = True) -> dict:
         headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
 
+    # Defense-in-depth: nur https zulassen (URL ist konstant, aber explizit absichern).
+    if not GUMROAD_VERIFY_URL.startswith("https://"):
+        raise LicenseError("Ungueltige API-URL (nur https erlaubt)")
+
     # Standard-SSL-Kontext (PyInstaller bundlet CA-Zertifikate via certifi-Hook).
     # Bei echten Zertifikatsproblemen scheitert die Verbindung mit SSLError —
     # diese wird als Netzwerkfehler behandelt (Cache bleibt gueltig, Offline-Modus).
     ctx = ssl.create_default_context()
 
     try:
-        with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
+        with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:  # noqa: S310 - konstante https-URL, oben validiert
             body = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         try:

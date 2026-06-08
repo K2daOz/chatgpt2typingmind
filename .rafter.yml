@@ -1,0 +1,28 @@
+# Rafter suppressions — each entry justified after input->sink analysis.
+# This is a PyQt6 desktop app. Data formats: JSON only (no XML, no web framework).
+
+ignore:
+  # R-6675E (XXE): FALSE POSITIVE.
+  # No XML anywhere in the codebase (verified: zero xml/lxml/etree imports).
+  # The flagged lines are json.loads() and Path.read_text() calls. The XXE
+  # rule mis-fires on JSON parsing / file reads. No external-entity surface.
+  - rule: R-6675E
+
+  # R-5FEE9 (missing .strip() on regex group): FALSE POSITIVE.
+  # Capture groups come from SEDIMENT_RE = r"sediment://file_([0-9a-f]+)" and
+  # FILESERVICE_RE = r"file-service://file-([A-Za-z0-9]+)". Both character
+  # classes exclude whitespace, so group(1) can never contain leading/trailing
+  # whitespace. .strip() would be a no-op.
+  - rule: R-5FEE9
+
+  # R-3F913 (unsafe URL prefix check): FALSE POSITIVE.
+  # settings.py:64 `value.startswith("b64:")` checks an internal obfuscation
+  # marker on a local config string, not a URL. "b64:" is not a URL scheme;
+  # no redirect/traversal surface. urljoin is not applicable.
+  - rule: R-3F913
+
+  # R-C606D (assertNotEqual): FALSE POSITIVE.
+  # test_settings.py:20 asserts the obfuscated value differs from the original
+  # (obfuscation must change the input). assertNotEqual is the correct, intended
+  # assertion; the roundtrip equality is verified on the next line.
+  - rule: R-C606D

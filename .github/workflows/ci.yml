@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: windows-latest
+    runs-on: windows-2022
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -30,7 +30,7 @@ jobs:
         run: pytest test_license.py test_discover.py test_manifest.py test_settings.py test_chat_metadata.py -v
 
   build-exe:
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: test
     if: github.ref == 'refs/heads/main'
 

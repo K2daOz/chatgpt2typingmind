@@ -33,6 +33,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+# Vorkompiliert (einmal statt pro Nachricht). Negierte Klasse [^\]]+ ist
+# linear -> kein katastrophisches Backtracking / ReDoS.
+ATTACHMENT_REF_RE = re.compile(
+    r"\[(?:Bild|audio\s+asset\s+pointer|video\s+asset\s+pointer):\s*([^\]]+)\]"
+)
+
 
 # ---------------------------------------------------------------------------
 # Zeithelfer
@@ -343,7 +349,7 @@ def build_canonical(
         # Attachment-Platzhalter aus Nachrichten extrahieren
         for msg in messages:
             att_ids = []
-            for match in re.finditer(r"\[(?:Bild|audio\s+asset\s+pointer|video\s+asset\s+pointer):\s*([^\]]+)\]", msg["content"]):
+            for match in ATTACHMENT_REF_RE.finditer(msg["content"]):
                 att_counter += 1
                 att_id = f"att-{att_counter:06d}"
                 att_ids.append(att_id)
