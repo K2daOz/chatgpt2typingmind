@@ -26,3 +26,24 @@ ignore:
   # (obfuscation must change the input). assertNotEqual is the correct, intended
   # assertion; the roundtrip equality is verified on the next line.
   - rule: R-C606D
+
+  # R-065E1 (audit urlopen schemes): FALSE POSITIVE (exploitability).
+  # license.py only opens the hardcoded constant GUMROAD_VERIFY_URL
+  # ("https://api.gumroad.com/..."). It is never user-controlled, so file:/
+  # custom schemes are impossible. A defensive https-prefix guard is also in
+  # place before the call. Rafter cannot prove the constant statically.
+  - rule: R-065E1
+
+  # R-0AB4A (try/except/pass): ACCEPTED (intentional graceful degradation).
+  # Three sites, each falls through to a documented safe default so one
+  # malformed record never aborts a batch migration:
+  #   build_typingmind_export.py: bad image -> "[Bild: ...]" placeholder
+  #   build_typingmind_export.py: bad timestamp -> NOW
+  #   migrate.py: corrupt config.json -> proceed with fresh config
+  - rule: R-0AB4A
+
+  # R-D896D (process without shell): FALSE POSITIVE.
+  # gui.py os.startfile() opens an app-generated timestamped output directory
+  # (never user-text-controlled) with no shell. Launching without a shell is
+  # the secure pattern; there is no injection surface.
+  - rule: R-D896D

@@ -361,7 +361,7 @@ def _make_image_tag(filename: str, image_base_url: str, export_dir: Optional[Pat
             try:
                 return f"![Bild]({image_to_data_uri(img_path)})"
             except Exception:
-                pass
+                pass  # Defekt/unlesbar -> Platzhalter unten (Migration nicht abbrechen)
 
     return f"[Bild: {filename}]"
 
@@ -520,7 +520,7 @@ def chatgpt_conv_to_tm(
                 return (datetime.fromtimestamp(float(ts), tz=timezone.utc)
                         .replace(microsecond=0).isoformat())
             except Exception:
-                pass
+                pass  # Ungueltiger Timestamp -> Fallback NOW unten
         return NOW
 
     chat: Dict[str, Any] = {

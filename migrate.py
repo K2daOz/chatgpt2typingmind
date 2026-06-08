@@ -423,7 +423,7 @@ def run_discover(paths: Dict, canonical_path: Path) -> None:
             existing_config = load_json(config_path)
             print(f"  Bestehende config.json geladen: {config_path}")
         except Exception:
-            pass
+            pass  # Korrupte/unlesbare config -> mit frischer config fortfahren
 
     # projects.json aus Export laden (falls vorhanden)
     projects_json_map = None
