@@ -20,14 +20,14 @@ TypingMind has a built-in "Import from OpenAI" feature, but it's limited:
 | Incremental sync (delta) | no | **yes** |
 | Folder renaming | no | **yes** |
 | Selective project migration | no | **yes** |
-| Starred / pinned / archived preserved | no | **yes** (as tags) |
+| Starred / archived preserved | no | **yes** (as tags) |
 | Bilingual UI (EN/DE) | - | **yes** |
 
 ---
 
 ## What's New in v1.1.0
 
-- **Chat metadata preserved** — ChatGPT starred / pinned / archived flags are kept as TypingMind tags
+- **Chat metadata preserved** — ChatGPT starred and archived flags are kept as TypingMind tags (pinned too, if a future ChatGPT export includes it)
 - **Selective migration** — check/uncheck individual projects before migrating
 - **Filter & search** — filter projects by keyword or minimum chat count
 - **Migration report** — detailed statistics after each migration (chats, folders, ZIP size, top folders)
@@ -45,7 +45,7 @@ TypingMind has a built-in "Import from OpenAI" feature, but it's limited:
 | Custom folder names | yes | yes |
 | Selective project migration | yes | yes |
 | Filter & search projects | yes | yes |
-| Metadata as tags (starred/pinned/archived) | yes | yes |
+| Metadata as tags (starred/archived) | yes | yes |
 | Migration report | yes | yes |
 | Image hosting (Cloudflare R2) | - | yes |
 | Delta-Sync (only new chats) | - | yes |

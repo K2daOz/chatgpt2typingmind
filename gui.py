@@ -188,14 +188,14 @@ class MigrateWorker(QThread):
                 stats["chats_per_folder"][folder_title] = stats["chats_per_folder"].get(folder_title, 0) + 1
                 if raw.get("is_starred"):
                     stats["starred"] += 1
-                if raw.get("is_pinned"):
+                if raw.get("is_pinned") or raw.get("pinned_time"):
                     stats["pinned"] += 1
                 if raw.get("is_archived"):
                     stats["archived"] += 1
 
             if not self.is_pro and len(chats) > FREE_CHAT_LIMIT:
                 total_found = len(chats)
-                chats.sort(key=lambda c: c.get("createdAt", 0), reverse=True)
+                chats.sort(key=lambda c: c.get("createdAt", ""), reverse=True)
                 chats = chats[:FREE_CHAT_LIMIT]
                 self.progress.emit(tr("p4_free_limit", limit=FREE_CHAT_LIMIT, total=total_found))
 

@@ -61,6 +61,14 @@ FILESERVICE_RE = re.compile(r"file-service://file-([A-Za-z0-9]+)")
 NOW = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 CHUNK_SIZE = 500  # Chats pro Chunk-Datei
 
+# TypingMind-Tags fuer ChatGPT-Metadata. Feste IDs (uuid5-abgeleitet, stabil),
+# damit alle Chats mit demselben Flag denselben Tag teilen statt Duplikate.
+METADATA_TAGS: Dict[str, Dict[str, str]] = {
+    "starred":  {"id": "c2t-tag-starred-0000-000000000001", "name": "starred"},
+    "pinned":   {"id": "c2t-tag-pinned-0000-0000000000002", "name": "pinned"},
+    "archived": {"id": "c2t-tag-archived-000-0000000000003", "name": "archived"},
+}
+
 
 # ---------------------------------------------------------------------------
 # Hilfsfunktionen
@@ -543,14 +551,16 @@ def chatgpt_conv_to_tm(
     if folder_id:
         chat["folderID"] = folder_id
 
-    # ChatGPT-Metadata als TypingMind-Tags uebernehmen
-    tags: List[str] = []
+    # ChatGPT-Metadata als TypingMind-Tags uebernehmen.
+    # TypingMind erwartet Tag-OBJEKTE {"id","name"}, keine Strings.
+    # Stabile IDs pro Tag-Name -> TypingMind gruppiert sie als EINEN Tag.
+    tags: List[Dict[str, str]] = []
     if raw_conv.get("is_starred"):
-        tags.append("starred")
-    if raw_conv.get("is_pinned"):
-        tags.append("pinned")
+        tags.append(dict(METADATA_TAGS["starred"]))
+    if raw_conv.get("is_pinned") or raw_conv.get("pinned_time"):
+        tags.append(dict(METADATA_TAGS["pinned"]))
     if raw_conv.get("is_archived"):
-        tags.append("archived")
+        tags.append(dict(METADATA_TAGS["archived"]))
     if tags:
         chat["tags"] = tags
 

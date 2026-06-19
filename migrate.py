@@ -82,18 +82,18 @@ def resolve_paths(args) -> Dict[str, Path]:
         "output_dir": Path(args.output) if args.output else project_root / DEFAULT_OUTPUT_DIR / f"typingmind_import_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
     }
 
-    # TM-Export: entweder explizit angegeben oder automatisch suchen
+    # TM-Export: entweder explizit angegeben oder automatisch suchen.
+    # Discovery braucht keinen TM-Export -> hier nicht hart abbrechen;
+    # run_build validiert bei Bedarf.
     if args.tm_export:
         paths["tm_export"] = Path(args.tm_export)
     else:
-        # Suche nach *_typingmind_export-Ordner im Projekt
         candidates = sorted(project_root.glob("*_typingmind_export"), reverse=True)
         if candidates:
             paths["tm_export"] = candidates[0]
             print(f"  TM-Export automatisch gefunden: {candidates[0].name}")
         else:
-            print("FEHLER: Kein TypingMind-Export gefunden. Bitte --tm-export angeben.")
-            sys.exit(1)
+            paths["tm_export"] = None
 
     return paths
 
@@ -162,6 +162,7 @@ def run_build(
     paths: Dict[str, Path],
     canonical_path: Path,
     mode: str,
+    pro: bool = False,
 ) -> None:
     """Fuehrt build_typingmind_export durch -> ZIP-Import"""
     print("\n" + "=" * 50)
@@ -187,6 +188,10 @@ def run_build(
     images_dir = paths["project_root"] / "migration_workspace" / "images"
     image_mapping_path = images_dir / "_image_mapping.json" if images_dir.exists() else None
     image_map = build_image_map(paths["chatgpt_export"], image_mapping_path)
+
+    if not paths.get("tm_export"):
+        print("FEHLER: Kein TypingMind-Export gefunden. Bitte --tm-export angeben.")
+        sys.exit(1)
 
     tm_data = load_json(paths["tm_export"] / "data.json")
     existing_folders = tm_data["data"]["folders"]
@@ -234,6 +239,13 @@ def run_build(
         print("\n  WARNUNG: Keine folder_map in config.json!")
         print("  Fuehre zuerst --discover aus um Projekte zu erkennen.")
 
+    # Selektive Migration: nur enabled-Projekte (Konsistenz mit GUI)
+    enabled_pids = {pid for pid, e in folder_map.items() if e.get("enabled", True)}
+    disabled = len(folder_map) - len(enabled_pids)
+    if disabled:
+        print(f"  {disabled} deaktivierte Projekt(e) werden uebersprungen")
+    folder_map = {pid: e for pid, e in folder_map.items() if pid in enabled_pids}
+
     print("\n  Ordner aufbauen...")
     updated_folders, title_to_id = build_folder_structure(
         existing_folders, folder_map, project_instructions
@@ -261,16 +273,28 @@ def run_build(
         if not raw:
             continue
 
+        pid = conv.get("project_id")
+        # Deaktivierte Projekte ueberspringen (Konsistenz mit GUI)
+        if pid and pid not in enabled_pids:
+            continue
+
         count += 1
         if count % 100 == 0:
             print(f"    ... {count}/{total}")
 
-        pid = conv.get("project_id")
         folder_id = pid_to_folder_id.get(pid) if pid else None
         tm_chat = chatgpt_conv_to_tm(raw, folder_id, image_map, image_base_url, export_dir)
         chatgpt_chats.append(tm_chat)
 
     print(f"  Konvertiert: {len(chatgpt_chats)} Chats")
+
+    # Free-Limit durchsetzen (Konsistenz mit GUI; Paywall auch im CLI)
+    if not pro and len(chatgpt_chats) > FREE_CHAT_LIMIT:
+        total_found = len(chatgpt_chats)
+        chatgpt_chats.sort(key=lambda c: c.get("createdAt", ""), reverse=True)
+        chatgpt_chats = chatgpt_chats[:FREE_CHAT_LIMIT]
+        print(f"  FREE: {FREE_CHAT_LIMIT} von {total_found} Chats migriert. "
+              f"Pro-Lizenz fuer alle Chats: --license-key DEIN_KEY")
 
     # Finale Chat-Liste
     all_chats = tm_native + chatgpt_chats
@@ -400,7 +424,7 @@ def main(argv=None):
         run_discover(paths, canonical_path)
     else:
         # Phase 2: Build
-        run_build(paths, canonical_path, args.mode)
+        run_build(paths, canonical_path, args.mode, pro=pro)
 
     elapsed = time.time() - start
     print(f"\nLaufzeit: {elapsed:.1f}s")

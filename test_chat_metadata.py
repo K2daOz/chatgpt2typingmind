@@ -1,7 +1,12 @@
 """Unit-Tests fuer Chat-Metadata-Mapping (Sprint 1.1 Feature 1)"""
 
 import unittest
-from build_typingmind_export import chatgpt_conv_to_tm
+from build_typingmind_export import chatgpt_conv_to_tm, METADATA_TAGS
+
+
+def _names(chat):
+    """Tag-Namen aus dem TypingMind-Objektformat extrahieren."""
+    return {t["name"] for t in chat.get("tags", [])}
 
 
 class TestChatMetadataTags(unittest.TestCase):
@@ -22,22 +27,41 @@ class TestChatMetadataTags(unittest.TestCase):
     def test_starred_creates_tag(self):
         chat = chatgpt_conv_to_tm(self._make_raw(is_starred=True), None, {}, "", None)
         self.assertIn("tags", chat)
-        self.assertIn("starred", chat["tags"])
+        self.assertIn("starred", _names(chat))
 
     def test_pinned_creates_tag(self):
         chat = chatgpt_conv_to_tm(self._make_raw(is_pinned=True), None, {}, "", None)
-        self.assertIn("pinned", chat["tags"])
+        self.assertIn("pinned", _names(chat))
+
+    def test_pinned_time_creates_tag(self):
+        # ChatGPT speichert Pins teils als pinned_time statt is_pinned
+        chat = chatgpt_conv_to_tm(self._make_raw(pinned_time=1735689600), None, {}, "", None)
+        self.assertIn("pinned", _names(chat))
 
     def test_archived_creates_tag(self):
         chat = chatgpt_conv_to_tm(self._make_raw(is_archived=True), None, {}, "", None)
-        self.assertIn("archived", chat["tags"])
+        self.assertIn("archived", _names(chat))
 
     def test_all_flags_all_tags(self):
         chat = chatgpt_conv_to_tm(
             self._make_raw(is_starred=True, is_pinned=True, is_archived=True),
             None, {}, "", None
         )
-        self.assertEqual(set(chat["tags"]), {"starred", "pinned", "archived"})
+        self.assertEqual(_names(chat), {"starred", "pinned", "archived"})
+
+    def test_tags_are_objects_not_strings(self):
+        # Regression K1: TypingMind erwartet {"id","name"}, keine Strings
+        chat = chatgpt_conv_to_tm(self._make_raw(is_starred=True), None, {}, "", None)
+        tag = chat["tags"][0]
+        self.assertIsInstance(tag, dict)
+        self.assertIn("id", tag)
+        self.assertIn("name", tag)
+
+    def test_tag_ids_stable_across_chats(self):
+        # Gleicher Flag -> gleiche Tag-ID (TypingMind gruppiert statt dupliziert)
+        c1 = chatgpt_conv_to_tm(self._make_raw(is_archived=True), None, {}, "", None)
+        c2 = chatgpt_conv_to_tm(self._make_raw(is_archived=True), None, {}, "", None)
+        self.assertEqual(c1["tags"][0]["id"], c2["tags"][0]["id"])
 
     def test_false_flags_no_tags(self):
         chat = chatgpt_conv_to_tm(
