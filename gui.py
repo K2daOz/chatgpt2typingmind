@@ -6,6 +6,8 @@ Wizard mit 4 Schritten, zweisprachig (DE/EN), Freemium-Lizenzierung.
 
 from __future__ import annotations
 
+APP_VERSION = "1.1.1"
+
 import json
 import os
 import sys
@@ -964,7 +966,7 @@ class MigrationWizard(QWizard):
 
     def _update_title(self):
         key = "wizard_title_pro" if self._is_pro else "wizard_title_free"
-        self.setWindowTitle(tr(key))
+        self.setWindowTitle(f"{tr(key)}  v{APP_VERSION}")
 
     def _update_buttons(self):
         self.setButtonText(QWizard.WizardButton.NextButton, tr("btn_next"))
